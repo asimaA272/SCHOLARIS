@@ -13,45 +13,13 @@ interface Paper {
   url?: string;
 }
 
-interface OpenAlexWork {
-  id?: string;
-  title?: string;
-  authorships?: { author?: { display_name?: string } }[];
-  primary_location?: { source?: { display_name?: string } };
-  host_venue?: { display_name?: string };
-  abstract_inverted_index?: Record<string, number[]>;
-  publication_year?: number;
-  cited_by_count?: number;
-  doi?: string;
-  open_access?: { oa_url?: string };
-}
-
-interface SemanticScholarPaper {
-  paperId?: string;
-  title?: string;
-  authors?: { name: string }[];
-  year?: number;
-  citationCount?: number;
-  abstract?: string;
-  externalIds?: { DOI?: string };
-  openAccessPdf?: { url?: string };
-  venue?: string;
-}
-
-interface CrossRefWork {
-  message?: {
-    "container-title"?: string[];
-    publisher?: string;
-  };
-}
-
 async function fetchOpenAlex(query: string): Promise<Paper[]> {
   const url = `https://api.openalex.org/works?search=${encodeURIComponent(query)}&per-page=10&sort=cited_by_count:desc&mailto=hello@scholaris.app`;
   const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
   if (!res.ok) throw new Error(`OpenAlex error: ${res.status}`);
-  const data = (await res.json()) as { results?: OpenAlexWork[] };
-  return (data.results || []).map((w, i) => {
-    const authors = (w.authorships || []).slice(0, 3).map((a) => a.author?.display_name || "Unknown").join(", ");
+  const data = await res.json();
+  return (data.results || []).map((w: any, i: number) => {
+    const authors = (w.authorships || []).slice(0, 3).map((a: any) => a.author?.display_name || "Unknown").join(", ");
     const journal = w.primary_location?.source?.display_name || w.host_venue?.display_name || "Unknown Journal";
     const abstract = w.abstract_inverted_index
       ? Object.entries(w.abstract_inverted_index as Record<string, number[]>)
@@ -79,8 +47,8 @@ async function fetchSemanticScholar(query: string): Promise<Paper[]> {
   const url = `https://api.semanticscholar.org/graph/v1/paper/search?query=${encodeURIComponent(query)}&limit=10&fields=${fields}`;
   const res = await fetch(url, { headers: { "User-Agent": "Scholaris/1.0" }, signal: AbortSignal.timeout(8000) });
   if (!res.ok) throw new Error(`S2 error: ${res.status}`);
-  const data = (await res.json()) as { data?: SemanticScholarPaper[] };
-  return (data.data || []).map((p, i) => ({
+  const data = await res.json();
+  return (data.data || []).map((p: any, i: number) => ({
     id: p.paperId || String(i),
     title: p.title || "Untitled",
     authors: p.authors?.slice(0, 3).map((a: { name: string }) => a.name).join(", ") || "Unknown",
@@ -102,7 +70,7 @@ async function enrichWithCrossRef(papers: Paper[]): Promise<Paper[]> {
         headers: { "User-Agent": "Scholaris/1.0" }, signal: AbortSignal.timeout(4000)
       });
       if (!res.ok) return paper;
-      const data = (await res.json()) as CrossRefWork;
+      const data = await res.json();
       return { ...paper, journal: data.message?.["container-title"]?.[0] || data.message?.publisher || paper.journal };
     } catch { return paper; }
   }));
